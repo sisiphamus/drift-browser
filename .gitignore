@@ -1,0 +1,7 @@
+node_modules
+out
+dist
+.claude/worktrees
+.e2e-adblock.bin
+.e2e-adblock-v3.bin
+src/renderer/public/fonts/*.woff2

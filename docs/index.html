@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Drift Browser</title>
+<meta name="description" content="Drift is a fast Chromium browser for Linux, for those who can't find the browser best for them. Spaces, splits, sleeping tabs, and Claude built in.">
+<meta property="og:title" content="Drift Browser">
+<meta property="og:description" content="For those who can't find the browser best for them.">
+<meta property="og:image" content="https://sisiphamus.github.io/drift-browser/assets/hero.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://api.fontshare.com">
+<link href="https://api.fontshare.com/v2/css?f[]=switzer@400,500,600,700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: oklch(0.165 0.012 262);
+  --bg-2: oklch(0.2 0.014 262);
+  --line: oklch(0.32 0.014 262);
+  --fg: oklch(0.94 0.006 262);
+  --mute: oklch(0.74 0.012 262);
+  --accent: #a8c7fa;
+  --on-accent: #0a305f;
+  --radius: 14px;
+  --gutter: clamp(16px, 4vw, 56px);
+  --spring: cubic-bezier(.16, 1, .3, 1);
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; background: var(--bg); }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font-family: 'Switzer', ui-sans-serif, system-ui, sans-serif; font-size: 18px; line-height: 1.55;
+  -webkit-font-smoothing: antialiased; overflow-x: hidden;
+}
+a { color: inherit; }
+::selection { background: var(--accent); color: var(--on-accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; }
+
+/* ---------- the tucked sidebar, as in Drift ---------- */
+.edge { position: fixed; inset: 0 auto 0 0; width: 14px; z-index: 30; }
+.side {
+  position: fixed; z-index: 40; top: 10px; bottom: 10px; left: 10px; width: 264px;
+  background: oklch(0.21 0.014 262 / .96); border: 1px solid var(--line); border-radius: 18px;
+  padding: 14px; display: flex; flex-direction: column; gap: 4px;
+  transform: translateX(calc(-100% - 24px)); transition: transform .42s var(--spring);
+  box-shadow: 0 30px 80px oklch(0 0 0 / .45);
+}
+.side.open { transform: none; }
+.side .pill { display: flex; align-items: center; justify-content: space-between; background: oklch(0.26 0.014 262); border-radius: 12px; padding: 10px 12px; font-size: 15px; color: var(--mute); margin-bottom: 10px; }
+.side .pill kbd { font: inherit; font-size: 13px; border: 1px solid var(--line); border-radius: 6px; padding: 0 6px; }
+.side h4 { margin: 10px 8px 6px; font-size: 15px; font-weight: 600; }
+.side a { display: block; text-decoration: none; padding: 9px 10px; border-radius: 10px; font-size: 16px; color: var(--mute); transition: background .15s, color .15s; }
+.side a:hover, .side a.here { background: oklch(0.28 0.016 262); color: var(--fg); }
+.side .foot { margin-top: auto; font-size: 13px; color: var(--mute); padding: 8px 10px; }
+.hint { position: fixed; left: 0; top: 50%; z-index: 20; transform: translateY(-50%); width: 4px; height: 72px; border-radius: 0 4px 4px 0; background: var(--accent); opacity: .7; }
+
+/* ---------- command bar ---------- */
+.bar-wrap { position: fixed; inset: 0; z-index: 60; display: none; background: oklch(0 0 0 / .45); }
+.bar-wrap.open { display: block; }
+.bar { width: min(620px, calc(100% - 32px)); margin: 14vh auto 0; background: oklch(0.22 0.014 262); border: 1px solid var(--line); border-radius: 16px; overflow: hidden; box-shadow: 0 30px 90px oklch(0 0 0 / .6); animation: pop .28s var(--spring); }
+@keyframes pop { from { transform: translateY(-8px) scale(.98); opacity: 0 } }
+.bar input { width: 100%; border: 0; background: none; color: var(--fg); font: inherit; font-size: 20px; padding: 18px 20px; outline: none; }
+.bar ul { list-style: none; margin: 0; padding: 6px; border-top: 1px solid var(--line); max-height: 50vh; overflow: auto; }
+.bar li { padding: 11px 14px; border-radius: 10px; cursor: pointer; display: flex; justify-content: space-between; color: var(--mute); }
+.bar li.sel { background: oklch(0.29 0.02 262); color: var(--fg); }
+.bar li span { font-size: 14px; }
+
+/* ---------- page ---------- */
+main { max-width: 1240px; margin: 0 auto; padding: 0 var(--gutter); }
+header.top { display: flex; align-items: center; justify-content: space-between; padding: 22px 0; font-size: 16px; }
+header.top b { font-weight: 600; letter-spacing: -.01em; font-size: 18px; }
+header.top nav { display: flex; gap: 22px; align-items: center; }
+header.top nav a { text-decoration: none; color: var(--mute); }
+header.top nav a:hover { color: var(--fg); }
+.btn { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; padding: 13px 20px; border-radius: 12px; font-weight: 500; transition: transform .2s var(--spring), background .2s; min-height: 44px; }
+.btn.solid { background: var(--accent); color: var(--on-accent); }
+.btn.solid:hover { transform: translateY(-1px); }
+.btn.ghost { border: 1px solid var(--line); color: var(--fg); }
+.btn.ghost:hover { background: var(--bg-2); }
+
+.hero { padding: clamp(48px, 9vw, 120px) 0 40px; }
+.hero h1 { font-size: clamp(64px, 13vw, 168px); line-height: .9; letter-spacing: -.055em; margin: 0; font-weight: 600; }
+.hero h1 + p { font-size: clamp(26px, 3.6vw, 48px); line-height: 1.12; letter-spacing: -.02em; margin: 22px 0 0; max-width: 24ch; font-weight: 500; }
+.hero .lede { color: var(--mute); max-width: 58ch; margin: 26px 0 34px; font-size: 19px; }
+.hero .cta { display: flex; gap: 12px; flex-wrap: wrap; }
+
+.window { position: relative; border-radius: 18px; overflow: hidden; border: 1px solid var(--line); box-shadow: 0 50px 120px oklch(0 0 0 / .55), 0 0 0 6px oklch(0.2 0.014 262 / .6); background: #111; }
+.window img { display: block; width: 100%; height: auto; }
+.stage { margin: 26px 0 0; perspective: 1600px; }
+.stage .window { transform: rotateX(var(--tilt, 9deg)) scale(var(--zoom, .96)); transform-origin: 50% 0; transition: transform .1s linear; }
+
+section { padding: clamp(80px, 12vw, 150px) 0 0; scroll-margin-top: 20px; }
+.feat { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: clamp(28px, 5vw, 72px); align-items: center; }
+.feat.flip { grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); }
+.feat.flip .copy { order: 2; }
+.copy h2 { font-size: clamp(34px, 4.4vw, 60px); line-height: 1.02; letter-spacing: -.035em; margin: 0 0 18px; font-weight: 600; }
+.copy p { color: var(--mute); margin: 0 0 14px; max-width: 46ch; }
+.copy kbd { font: inherit; font-size: .9em; color: var(--fg); border: 1px solid var(--line); border-radius: 6px; padding: 0 6px; }
+.reveal { opacity: 0; transform: translateY(26px); transition: opacity .8s var(--spring), transform .8s var(--spring); }
+.reveal.in { opacity: 1; transform: none; }
+
+/* Claude: two real frames from one run */
+.agent { display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: clamp(28px, 5vw, 72px); align-items: center; }
+.frames { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+.frames figure { margin: 0; }
+.frames figcaption { font-size: 14px; color: var(--mute); margin-top: 10px; }
+.frames .window { box-shadow: 0 30px 70px oklch(0 0 0 / .5); }
+
+#spaces .window { max-width: 520px; justify-self: center; }
+
+/* numbers */
+.bench h2 { font-size: clamp(40px, 6vw, 84px); letter-spacing: -.045em; line-height: .98; margin: 0 0 14px; font-weight: 600; max-width: 14ch; }
+.bench > p { color: var(--mute); max-width: 60ch; margin: 0 0 44px; }
+.metric { display: grid; grid-template-columns: 200px minmax(0, 1fr); gap: 20px; padding: 22px 0; border-top: 1px solid var(--line); align-items: center; }
+.metric:last-of-type { border-bottom: 1px solid var(--line); }
+.metric h3 { margin: 0; font-size: 18px; font-weight: 500; }
+.metric h3 small { display: block; color: var(--mute); font-weight: 400; font-size: 14px; }
+.rows { display: grid; gap: 10px; }
+.row { display: grid; grid-template-columns: 64px minmax(0, 1fr) 110px; gap: 14px; align-items: center; font-size: 15px; }
+.row .track { height: 14px; border-radius: 7px; background: oklch(0.24 0.012 262); overflow: hidden; }
+.row .fill { height: 100%; width: 0; border-radius: 7px; background: oklch(0.55 0.02 262); transition: width 1.2s var(--spring); }
+.row.drift .fill { background: var(--accent); }
+.row b { font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+.method { font-size: 14px; color: var(--mute); margin-top: 18px; max-width: 80ch; }
+.method code { color: var(--fg); }
+
+/* terminal */
+.term { background: oklch(0.13 0.01 262); border: 1px solid var(--line); border-radius: var(--radius); padding: 24px 26px; overflow-x: auto; font-family: ui-monospace, 'JetBrains Mono', 'SFMono-Regular', Menlo, monospace; font-size: 15px; line-height: 1.75; }
+.term .c { color: oklch(0.6 0.012 262); }
+.term .p { color: var(--accent); user-select: none; }
+
+/* lists */
+.cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 clamp(28px, 5vw, 72px); margin-top: 34px; }
+.cols div { padding: 20px 0; border-top: 1px solid var(--line); }
+.cols h3 { margin: 0 0 6px; font-size: 19px; font-weight: 600; }
+.cols p { margin: 0; color: var(--mute); font-size: 16px; }
+.sec-title { font-size: clamp(34px, 4.4vw, 60px); line-height: 1.02; letter-spacing: -.035em; margin: 0; font-weight: 600; max-width: 18ch; }
+
+.install { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: clamp(28px, 5vw, 72px); align-items: start; }
+footer { margin-top: clamp(90px, 12vw, 150px); padding: 30px 0 50px; border-top: 1px solid var(--line); display: flex; justify-content: space-between; gap: 20px; flex-wrap: wrap; color: var(--mute); font-size: 15px; }
+
+@media (max-width: 860px) {
+  .feat, .feat.flip, .agent, .install { grid-template-columns: 1fr; }
+  .feat.flip .copy { order: 0; }
+  .frames { grid-template-columns: 1fr; }
+  .cols { grid-template-columns: 1fr; }
+  .metric { grid-template-columns: 1fr; gap: 12px; }
+  .row { grid-template-columns: 56px minmax(0, 1fr) 92px; }
+  header.top nav a:not(.btn) { display: none; }
+  .edge, .hint { display: none; }
+  .stage .window { transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .reveal { opacity: 1; transform: none; transition: none; }
+  .stage .window { transform: none; transition: none; }
+  .side, .row .fill { transition: none; }
+}
+</style>
+</head>
+<body>
+
+<div class="edge" aria-hidden="true"></div>
+<div class="hint" aria-hidden="true"></div>
+<aside class="side" id="side" aria-label="Sections">
+  <button class="pill" id="openBar" type="button" style="border:0;font:inherit;cursor:pointer;text-align:left">Jump anywhere <kbd>/</kbd></button>
+  <h4>Drift</h4>
+  <a href="#top">Overview</a>
+  <a href="#spaces">Spaces</a>
+  <a href="#split">Split view</a>
+  <a href="#bar">Command bar</a>
+  <a href="#memory">Sleeping tabs</a>
+  <a href="#claude">Claude, built in</a>
+  <a href="#numbers">Against Brave</a>
+  <a href="#terminal">From the terminal</a>
+  <a href="#private">Privacy</a>
+  <a href="#install">Install</a>
+  <div class="foot">This menu works like Drift's sidebar: it hides until your pointer touches the left edge.</div>
+</aside>
+
+<div class="bar-wrap" id="barWrap" role="dialog" aria-label="Jump to section">
+  <div class="bar">
+    <input id="barInput" placeholder="Jump to a section" autocomplete="off" spellcheck="false" aria-label="Section">
+    <ul id="barList"></ul>
+  </div>
+</div>
+
+<main id="top">
+  <header class="top">
+    <b>Drift</b>
+    <nav>
+      <a href="#claude">Claude</a>
+      <a href="#numbers">Numbers</a>
+      <a href="#install">Install</a>
+      <a class="btn ghost" href="https://github.com/sisiphamus/drift-browser">GitHub</a>
+    </nav>
+  </header>
+
+  <div class="hero">
+    <h1>Drift</h1>
+    <p>For those who can't find the browser best for them.</p>
+    <p class="lede">A Chromium browser for Linux with spaces you swipe between, splits you drag into place, tabs that sleep on their own, and Claude built in, working in the background while you keep browsing. It idles at a fraction of Brave's CPU.</p>
+    <div class="cta">
+      <a class="btn solid" href="#install">Install Drift</a>
+      <a class="btn ghost" href="https://github.com/sisiphamus/drift-browser">Read the source</a>
+    </div>
+  </div>
+  <div class="stage"><div class="window" id="heroShot"><img src="assets/hero.jpg" width="1440" height="900" alt="Drift showing a Wikipedia article, with the sidebar listing pinned sites, the Research space's tabs, and space switches at the bottom"></div></div>
+
+  <section id="spaces" class="feat reveal">
+    <div class="copy">
+      <h2>One space per thing you're doing.</h2>
+      <p>Research, a build, a trip. Each space keeps its own tabs and color. Swipe two fingers across any page, or press <kbd>Ctrl Alt</kbd> and an arrow, to slide to the next one.</p>
+      <p>Sites you use everywhere stay pinned at the top of every space. The sidebar tucks away until your pointer touches the left edge, so pages get the whole window.</p>
+    </div>
+    <div class="window"><img src="assets/spaces.jpg" width="760" height="900" loading="lazy" alt="Drift's sidebar: pinned sites, the Research space's tabs, and the Research, Build and Reading spaces"></div>
+  </section>
+
+  <section id="split" class="feat flip reveal">
+    <div class="copy">
+      <h2>Drag a tab onto a page to split it.</h2>
+      <p>Drop it on an edge and the panes spring into place. Drag the divider to resize, split again inside a split, and pull a tab back out when you're done.</p>
+    </div>
+    <div class="window"><img src="assets/split.jpg" width="1440" height="900" loading="lazy" alt="Wikipedia and the MDN View Transition API docs side by side"></div>
+  </section>
+
+  <section id="bar" class="feat reveal">
+    <div class="copy">
+      <h2>One bar for everything.</h2>
+      <p><kbd>Ctrl T</kbd> searches your open tabs, history, bookmarks and every command at once. <kbd>Shift Enter</kbd> opens the result in a split, <kbd>Alt Enter</kbd> in the background.</p>
+      <p>Start with <kbd>?</kbd> and the rest goes to Claude.</p>
+    </div>
+    <div class="window"><img src="assets/command.jpg" width="1440" height="900" loading="lazy" alt="The command bar matching an open Wikipedia tab and offering a Google search"></div>
+  </section>
+
+  <section id="memory" class="feat flip reveal">
+    <div class="copy">
+      <h2>Tabs that look after themselves.</h2>
+      <p>A tab you haven't looked at for 30 seconds drops its caches. One you haven't touched for 20 minutes goes to sleep and wakes when you click it. Set a memory cap and Drift sleeps the oldest tabs to stay under it.</p>
+      <p><kbd>Ctrl Shift M</kbd> shows what every tab costs, live.</p>
+    </div>
+    <div class="window"><img src="assets/memory.jpg" width="1440" height="900" loading="lazy" alt="The memory view listing each tab's RAM with a Sleep button"></div>
+  </section>
+
+  <section id="claude" class="agent reveal">
+    <div class="copy">
+      <h2>Hand it to Claude and keep browsing.</h2>
+      <p>Ask for something and Claude works in its own Agent space, with your logins, in tabs you never have to look at. Your view doesn't move. The sidebar shows each step, and you can stop it any time.</p>
+      <p>It reads text CAPTCHAs, works out why a form won't submit, and only stops for things that need you, like a code from your phone.</p>
+      <p>Drift also ships an MCP server, so Claude Code or any other agent can drive it the same way.</p>
+    </div>
+    <div class="frames">
+      <figure><div class="window"><img src="assets/agent-working.jpg" width="600" height="470" loading="lazy" alt="Sidebar card: Claude is working, running a script on the page, with a Stop button"></div><figcaption>While it works</figcaption></figure>
+      <figure><div class="window"><img src="assets/agent-done.jpg" width="600" height="470" loading="lazy" alt="Sidebar card: Claude finished, listing the three most-discussed Hacker News stories"></div><figcaption>When it's done (a real run)</figcaption></figure>
+    </div>
+  </section>
+
+  <section id="numbers" class="bench reveal">
+    <h2>Lighter than Brave where it counts.</h2>
+    <p>Both browsers open the same 8 real sites, then sit idle. Brave keeps working in the background; Drift mostly doesn't.</p>
+    <div class="metric">
+      <h3>Idle CPU<small>lower is better</small></h3>
+      <div class="rows">
+        <div class="row drift"><span>Drift</span><div class="track"><div class="fill" data-w="8"></div></div><b>about 2.5%</b></div>
+        <div class="row"><span>Brave</span><div class="track"><div class="fill" data-w="100"></div></div><b>9 to 29%</b></div>
+      </div>
+    </div>
+    <div class="metric">
+      <h3>Processes<small>lower is better</small></h3>
+      <div class="rows">
+        <div class="row drift"><span>Drift</span><div class="track"><div class="fill" data-w="70"></div></div><b>19</b></div>
+        <div class="row"><span>Brave</span><div class="track"><div class="fill" data-w="100"></div></div><b>27</b></div>
+      </div>
+    </div>
+    <div class="metric">
+      <h3>Memory<small>lower is better</small></h3>
+      <div class="rows">
+        <div class="row drift"><span>Drift</span><div class="track"><div class="fill" data-w="97"></div></div><b>872 MB</b></div>
+        <div class="row"><span>Brave</span><div class="track"><div class="fill" data-w="100"></div></div><b>898 MB</b></div>
+      </div>
+    </div>
+    <p class="method">Linux, headless, 8 tabs, total memory across every browser process (PSS) and CPU over a 20 second idle window, averaged over several rounds. Memory is close; the CPU gap is the big one. Run it yourself with <code>node scripts/bench.mjs drift</code> and <code>node scripts/bench.mjs brave</code>.</p>
+  </section>
+
+  <section id="terminal" class="feat reveal">
+    <div class="copy">
+      <h2>Your terminal is a remote.</h2>
+      <p>Everything the sidebar can do, the <code>drift</code> command can do too, over a local socket. Read pages as Markdown, click, type, take screenshots, move tabs between spaces. Add <code>--json</code> to script it.</p>
+    </div>
+    <pre class="term"><span class="p">$ </span>drift open github.com --split right
+<span class="p">$ </span>drift md @2 <span class="c"># the page as Markdown</span>
+<span class="p">$ </span>drift click active "text:Sign in"
+<span class="p">$ </span>drift type active "input[name=q]" "hello" --submit
+<span class="p">$ </span>drift shot active -o page.png --full
+<span class="p">$ </span>drift ws new Research
+<span class="p">$ </span>drift ask "find a cheap flight to Austin on Friday"
+<span class="p">$ </span>drift import zen <span class="c"># passwords and cookies</span></pre>
+  </section>
+
+  <section id="private">
+    <h2 class="sec-title reveal">Private without thinking about it.</h2>
+    <div class="cols reveal">
+      <div><h3>Blocking</h3><p>Ads, trackers, cookie banners, and the URLhaus malware and phishing lists. Pages wait for the blocker, so nothing loads unfiltered.</p></div>
+      <div><h3>Passwords</h3><p>Sealed with your system keyring. Autofill only offers a site its own logins, and only after a real click.</p></div>
+      <div><h3>Private spaces</h3><p>In-memory cookies and storage, no history, no extensions. Gone when the space closes.</p></div>
+      <div><h3>Cleaner links</h3><p>http upgrades to https, and tracking parameters like utm and fbclid are stripped before the request leaves.</p></div>
+      <div><h3>Bring your stuff</h3><p>Imports bookmarks, history, extensions, logins and cookies from Brave, and logins and cookies from Zen or Firefox.</p></div>
+      <div><h3>Chrome extensions</h3><p>Install from the Chrome Web Store with one click. Settings that extensions save through sync keep working.</p></div>
+    </div>
+  </section>
+
+  <section id="install" class="install reveal">
+    <div class="copy">
+      <h2>Install</h2>
+      <p>Linux with Node 22 or newer. Drift runs on Wayland or X11 and picks up your matugen or GTK colors if you have them.</p>
+      <p>To use Ask Claude, install <a href="https://docs.claude.com/en/docs/claude-code/overview">Claude Code</a> and sign in once.</p>
+    </div>
+    <pre class="term"><span class="p">$ </span>git clone https://github.com/sisiphamus/drift-browser
+<span class="p">$ </span>cd drift-browser
+<span class="p">$ </span>npm install
+<span class="p">$ </span>npm run build
+<span class="p">$ </span>npx electron .
+
+<span class="c"># optional: let Claude Code drive it</span>
+<span class="p">$ </span>claude mcp add drift -- node "$PWD/bin/drift-mcp.mjs"</pre>
+  </section>
+
+  <footer>
+    <span>Drift is free software under the GPL-3.0.</span>
+    <a href="https://github.com/sisiphamus/drift-browser">github.com/sisiphamus/drift-browser</a>
+  </footer>
+</main>
+
+<script>
+(() => {
+  const side = document.getElementById('side')
+  const edge = document.querySelector('.edge')
+  const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches
+  let menuTimer
+  const openSide = () => { clearTimeout(menuTimer); side.classList.add('open') }
+  const closeSide = () => { menuTimer = setTimeout(() => side.classList.remove('open'), 120) }
+  edge.addEventListener('mouseenter', openSide)
+  document.addEventListener('mousemove', (e) => {
+    if (e.clientX <= 4) openSide()
+    else if (side.classList.contains('open') && e.clientX > side.getBoundingClientRect().right + 24) closeSide()
+  })
+  side.addEventListener('mouseenter', openSide)
+  side.addEventListener('focusin', openSide)
+  side.addEventListener('focusout', (e) => { if (!side.contains(e.relatedTarget)) closeSide() })
+
+  // Current section in the sidebar
+  const links = [...side.querySelectorAll('a')]
+  const sections = links.map((a) => document.querySelector(a.getAttribute('href'))).filter(Boolean)
+  const mark = () => {
+    let cur = sections[0]
+    for (const s of sections) if (s.getBoundingClientRect().top < innerHeight * 0.4) cur = s
+    links.forEach((a) => a.classList.toggle('here', a.getAttribute('href') === '#' + cur.id))
+  }
+
+  // Hero window flattens as you scroll
+  const hero = document.getElementById('heroShot')
+  const tilt = () => {
+    if (reduce || innerWidth <= 860) return
+    const t = Math.min(1, Math.max(0, scrollY / (innerHeight * 0.6)))
+    hero.style.setProperty('--tilt', `${9 * (1 - t)}deg`)
+    hero.style.setProperty('--zoom', String(0.96 + 0.04 * t))
+  }
+  addEventListener('scroll', () => { mark(); tilt() }, { passive: true })
+  mark(); tilt()
+
+  // Reveal on scroll, and grow the benchmark bars when they arrive
+  const io = new IntersectionObserver((entries) => {
+    for (const e of entries) {
+      if (!e.isIntersecting) continue
+      e.target.classList.add('in')
+      e.target.querySelectorAll('.fill').forEach((f) => (f.style.width = f.dataset.w + '%'))
+      io.unobserve(e.target)
+    }
+  }, { threshold: 0.15 })
+  document.querySelectorAll('.reveal').forEach((el) => io.observe(el))
+
+  // Command bar: "/" or Ctrl K, like Drift's
+  const wrap = document.getElementById('barWrap')
+  const input = document.getElementById('barInput')
+  const list = document.getElementById('barList')
+  const items = links.map((a) => ({ title: a.textContent, href: a.getAttribute('href') }))
+  let sel = 0, shown = items
+  const render = () => {
+    const q = input.value.trim().toLowerCase()
+    shown = items.filter((i) => i.title.toLowerCase().includes(q))
+    sel = Math.min(sel, Math.max(0, shown.length - 1))
+    list.innerHTML = ''
+    shown.forEach((i, n) => {
+      const li = document.createElement('li')
+      li.className = n === sel ? 'sel' : ''
+      li.innerHTML = `${i.title}<span>Section</span>`
+      li.onmousemove = () => { sel = n; render() }
+      li.onclick = () => go(i)
+      list.appendChild(li)
+    })
+  }
+  const openBar = () => { wrap.classList.add('open'); input.value = ''; sel = 0; render(); input.focus() }
+  const closeBar = () => wrap.classList.remove('open')
+  const go = (i) => { closeBar(); location.hash = i.href }
+  document.getElementById('openBar').onclick = openBar
+  wrap.addEventListener('mousedown', (e) => { if (e.target === wrap) closeBar() })
+  input.addEventListener('input', () => { sel = 0; render() })
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'ArrowDown') { sel = Math.min(sel + 1, shown.length - 1); render(); e.preventDefault() }
+    else if (e.key === 'ArrowUp') { sel = Math.max(sel - 1, 0); render(); e.preventDefault() }
+    else if (e.key === 'Enter' && shown[sel]) go(shown[sel])
+    else if (e.key === 'Escape') closeBar()
+  })
+  addEventListener('keydown', (e) => {
+    const typing = /input|textarea/i.test(document.activeElement?.tagName || '')
+    if ((e.key === '/' && !typing) || (e.key.toLowerCase() === 'k' && (e.ctrlKey || e.metaKey))) { e.preventDefault(); openBar() }
+  })
+})()
+</script>
+</body>
+</html>
